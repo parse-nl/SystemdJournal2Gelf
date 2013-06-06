@@ -36,13 +36,19 @@ and passes all other arguments to journalctl. It prepends these arguments with
 --mode=json
 
 - Export only the kernel messages
-	SystemdJournal2Gelf localhost:11201 _TRANSPORT=kernel
+```
+SystemdJournal2Gelf localhost:11201 _TRANSPORT=kernel
+```
 
 - Perform initial import, reading entire journal
-	SystemdJournal2Gelf localhost:11201 --merge
+```
+SystemdJournal2Gelf localhost:11201 --merge
+```
 
 - Monitor the journal
-	SystemdJournal2Gelf localhost:11201 --follow
+```
+SystemdJournal2Gelf localhost:11201 --follow
+```
 
 
 License
