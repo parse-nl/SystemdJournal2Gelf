@@ -23,21 +23,10 @@ go build SystemdJournal2Gelf.go
 ```
 
 
-Performing import of current journal
-------------------------------------
-
-SystemdJournal2Gelf localhost:11201 --merge
-
-
-Monitor journal
----------------
-
-SystemdJournal2Gelf localhost:11201 --follow
-
 Running as a service
 --------------------
 
-Copy the included `examples/journal2gelf.service` to `/etc/systemd/system`.
+Copy the included `SystemdJournal2Gelf.service` to `/etc/systemd/system`.
 
 Usage:
 ------
@@ -48,6 +37,12 @@ and passes all other arguments to journalctl. It prepends these arguments with
 
 - Export only the kernel messages
 	SystemdJournal2Gelf localhost:11201 _TRANSPORT=kernel
+
+- Perform initial import, reading entire journal
+	SystemdJournal2Gelf localhost:11201 --merge
+
+- Monitor the journal
+	SystemdJournal2Gelf localhost:11201 --follow
 
 
 License
