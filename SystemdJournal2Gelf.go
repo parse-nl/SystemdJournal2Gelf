@@ -59,7 +59,7 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message, error) {
 		Short:		this.Message,
 		TimeUnix:	timestamp / 1000 / 1000,
 		Level:		int32(level),
-		Facility:	this.Systemd_unit,
+		Facility:	this.Syslog_identifier,
 		Extra:		map[string] interface {}{
 			"Boot_id":	this.Boot_id,
 			"Pid":		this.Pid,
