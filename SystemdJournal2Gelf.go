@@ -36,6 +36,7 @@ type SystemdJournalEntry struct {
 	Systemd_cgroup string		`json:"_SYSTEMD_CGROUP"`
 	Systemd_session string		`json:"_SYSTEMD_SESSION"`
 	Systemd_owner_uid string	`json:"_SYSTEMD_OWNER_UID"`
+	Systemd_unit string		`json:"_SYSTEMD_UNIT"`
 	Source_realtime_timestamp string`json:"_SOURCE_REALTIME_TIMESTAMP"`
 	Machine_id string		`json:"_MACHINE_ID"`
 	Hostname string			`json:"_HOSTNAME"`
@@ -58,7 +59,7 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message, error) {
 		Short:		this.Message,
 		TimeUnix:	timestamp / 1000 / 1000,
 		Level:		int32(level),
-		Facility:	this.Transport,
+		Facility:	this.Systemd_unit,
 		Extra:		map[string] interface {}{
 			"Boot_id":	this.Boot_id,
 			"Pid":		this.Pid,
