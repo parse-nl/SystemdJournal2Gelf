@@ -4,7 +4,7 @@ SystemdJournal2Gelf
 Export entries from systemds' journal and send them to a graylog server using gelf. This script
 is written in go to make it easier to compile and distribute to your machines.
 
-Tested on go1.1 on Archlinux using 204. Inspired by https://github.com/systemd/journal2gelf
+Tested on go1.1 on Archlinux using systemd-204. Inspired by https://github.com/systemd/journal2gelf
 
 
 Dependencies:
