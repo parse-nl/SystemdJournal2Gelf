@@ -33,7 +33,7 @@ Usage:
 
 SystemdJournal2Gelf will connect to the server you specify as first argument
 and passes all other arguments to journalctl. It prepends these arguments with
---mode=json
+--output=json
 
 - Export only the kernel messages
 ```
