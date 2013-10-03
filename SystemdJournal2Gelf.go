@@ -151,9 +151,9 @@ func main() {
 
 func writePendingEntry() {
 	for {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
-		if pendingEntry != nil {
+		if pendingEntry != nil && (time.Now().UnixNano() / 1000 - pendingEntry.Realtime_timestamp) > 100 * 1000 {
 			pendingEntry.send()
 		}
 	}
