@@ -41,7 +41,7 @@ type SystemdJournalEntry struct {
 	FullMessage					string
 }
 
-func (this *SystemdJournalEntry) toGelf() (*gelf.Message, error) {
+func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 	return &gelf.Message{
 		Version: 	"1.0",
 		Host:		this.Hostname,
@@ -55,7 +55,7 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message, error) {
 			"Pid":		this.Pid,
 			"Uid":		this.Uid,
 		},
-	}, nil
+	}
 }
 
 func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
@@ -67,8 +67,7 @@ func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
 		return false
 	}
 
-	// less than 1 second in between
-	if this.Realtime_timestamp-message.Realtime_timestamp > 1000000 {
+	if this.Realtime_timestamp-message.Realtime_timestamp > SAMESOURCE_TIME_DIFFERENCE {
 		return false
 	}
 
@@ -76,17 +75,30 @@ func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
 }
 
 func (this *SystemdJournalEntry) send() {
-	if message, err := this.toGelf(); err != nil {
+	message := this.toGelf()
+
+	if err := gelfWriter.WriteMessage(message); err != nil {
 		log.Print(err)
-	} else {
-		go gelfWriter.WriteMessage(message)
-		pendingEntry = nil
 	}
+}
+
+func (this *SystemdJournalEntry) extendWith(message *SystemdJournalEntry) {
+	if this.FullMessage == "" {
+		this.FullMessage = this.Message
+	}
+
+	this.FullMessage += "\n" + message.Message
 }
 
 var (
 	pendingEntry *SystemdJournalEntry
 	gelfWriter   *gelf.Writer
+)
+
+const (
+	WRITE_INTERVAL = 50 * time.Millisecond
+	SAMESOURCE_TIME_DIFFERENCE = 100*1000
+	JOURNAL_READER_BUFFER = 16384
 )
 
 func main() {
@@ -113,7 +125,7 @@ func main() {
 	go writePendingEntry()
 
 	// Larger buffer for systemd's inline coredumps which are typically ~ 14Kb
-	r := bufio.NewReaderSize(stdout, 16384)
+	r := bufio.NewReaderSize(stdout, JOURNAL_READER_BUFFER)
 	cmd.Start()
 
 	for line, _, err := r.ReadLine(); err != io.EOF; line, _, err = r.ReadLine() {
@@ -131,30 +143,29 @@ func main() {
 		if pendingEntry == nil {
 			pendingEntry = entry
 		} else if !pendingEntry.sameSource(entry) {
-			pendingEntry.send()
+			go pendingEntry.send()
 			pendingEntry = entry
 		} else {
-			if pendingEntry.FullMessage == "" {
-				pendingEntry.FullMessage = pendingEntry.Message
-			}
+			pendingEntry.extendWith(entry)
 
-			entry.FullMessage = pendingEntry.FullMessage + "\n" + entry.Message
-			entry.Message = pendingEntry.Message
-
-			// Replace pending so the higher timestamp keeps writePendingEntry waiting longer for us to append even more
-			pendingEntry = entry
+			// Keeps writePendingEntry waiting longer for us to append even more
+			pendingEntry.Realtime_timestamp = entry.Realtime_timestamp
 		}
 	}
 
 	cmd.Wait()
 }
 
+/*
+ * Sleep for WritePending_interval, then check if
+*/
 func writePendingEntry() {
 	for {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(WRITE_INTERVAL)
 
-		if pendingEntry != nil && (time.Now().UnixNano() / 1000 - pendingEntry.Realtime_timestamp) > 100 * 1000 {
-			pendingEntry.send()
+		if pendingEntry != nil && (time.Now().UnixNano() / 1000 - pendingEntry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
+			go pendingEntry.send()
+			pendingEntry = nil
 		}
 	}
 }
