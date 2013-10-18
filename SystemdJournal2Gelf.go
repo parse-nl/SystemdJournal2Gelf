@@ -137,10 +137,7 @@ func main() {
 
 		if err = json.Unmarshal(line, &entry); err != nil {
 			log.Printf("Could not parse line, skipping: %s\n", line)
-			continue
-		}
-
-		if pendingEntry == nil {
+		} else if pendingEntry == nil {
 			pendingEntry = entry
 		} else if !pendingEntry.sameSource(entry) {
 			go pendingEntry.send()
@@ -151,6 +148,9 @@ func main() {
 			// Keeps writePendingEntry waiting longer for us to append even more
 			pendingEntry.Realtime_timestamp = entry.Realtime_timestamp
 		}
+
+		// Prevent saturation and throttling
+		time.Sleep(1 * time.Millisecond)
 	}
 
 	cmd.Wait()
