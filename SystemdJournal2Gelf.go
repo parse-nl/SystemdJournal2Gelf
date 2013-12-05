@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -42,8 +43,13 @@ type SystemdJournalEntry struct {
 }
 
 func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
+	if -1 != strings.Index(this.Message, "\n") {
+		this.FullMessage = this.Message
+		this.Message = strings.Split(this.Message, "\n")[0]
+	}
+
 	return &gelf.Message{
-		Version: 	"1.0",
+		Version:	"1.0",
 		Host:		this.Hostname,
 		Short:		this.Message,
 		Full:		this.FullMessage,
