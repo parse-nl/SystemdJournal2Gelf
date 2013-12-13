@@ -48,6 +48,12 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 		this.Message = strings.Split(this.Message, "\n")[0]
 	}
 
+	// php-fpm refuses to fill identifier
+	facility := this.Syslog_identifier
+	if "" == facility {
+		facility = this.Comm
+	}
+
 	return &gelf.Message{
 		Version:	"1.0",
 		Host:		this.Hostname,
@@ -55,7 +61,7 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 		Full:		this.FullMessage,
 		TimeUnix:	this.Realtime_timestamp / 1000 / 1000,
 		Level:		this.Priority,
-		Facility:	this.Syslog_identifier,
+		Facility:	facility,
 		Extra: map[string]interface{}{
 			"Boot_id":	this.Boot_id,
 			"Pid":		this.Pid,
