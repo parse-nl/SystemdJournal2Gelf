@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"github.com/SocialCodeInc/go-gelf/gelf"
 	"io"
-	"log"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+	"regexp"
 )
 
 /*
@@ -42,6 +43,27 @@ type SystemdJournalEntry struct {
 	FullMessage					string
 }
 
+// Use named subpatterns to override other fields
+var messageReplace = map[*regexp.Regexp]string{
+	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "): "", //nginx
+	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+): "): "", //graylog2-server
+}
+
+var priorities = map[string]int32{
+	"emergency":0,
+	"emerg":	0,
+	"alert":	1,
+	"critical":	2,
+	"crit":		2,
+	"error":	3,
+	"err":		3,
+	"warning":	4,
+	"warn":		4,
+	"notice":	5,
+	"info":		6,
+	"debug":	7,
+}
+
 func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 	if -1 != strings.Index(this.Message, "\n") {
 		this.FullMessage = this.Message
@@ -62,11 +84,29 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 		TimeUnix:	this.Realtime_timestamp / 1000 / 1000,
 		Level:		this.Priority,
 		Facility:	facility,
-		Extra: map[string]interface{}{
+		Extra:		map[string]interface{}{
 			"Boot_id":	this.Boot_id,
 			"Pid":		this.Pid,
 			"Uid":		this.Uid,
 		},
+	}
+}
+
+func (this *SystemdJournalEntry) process() {
+	for re, replace := range messageReplace {
+		m := re.FindStringSubmatch(this.Message)
+		if nil == m {
+			continue
+		}
+
+		for idx, key := range re.SubexpNames() {
+			// no need for reflect, just define desired keys here
+			if "Priority" == key {
+				this.Priority, _ = priorities[strings.ToLower(m[idx])]
+			}
+		}
+
+		this.Message = re.ReplaceAllString(this.Message, replace)
 	}
 }
 
@@ -90,7 +130,7 @@ func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
 	if err := gelfWriter.WriteMessage(message); err != nil {
-		log.Print(err)
+		fmt.Fprintln(os.Stderr, err)
 	}
 }
 
@@ -115,19 +155,20 @@ const (
 
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("Pass server:12201 as first argument and append journalctl parameters to use")
+		fmt.Fprintln(os.Stderr, "Pass server:12201 as first argument and append journalctl parameters to use")
+		os.Exit(1)
 	}
 
 	serverAddr := os.Args[1]
-	journalArgs := os.Args[1:]
-	journalArgs[0] = "--output=json"
-
+	journalArgs := []string{"--all", "--output=json"}
+	journalArgs = append(journalArgs, os.Args[2:]...)
 	cmd := exec.Command("journalctl", journalArgs...)
 
 	var err error
 	gelfWriter, err = gelf.NewWriter(serverAddr)
 	if err != nil {
-		log.Fatalf("While connecting to Graylog server: %s", err)
+		fmt.Fprintf(os.Stderr, "While connecting to Graylog server: %s\n", err)
+		os.Exit(1)
 	}
 
 	stdout, _ := cmd.StdoutPipe()
@@ -148,8 +189,13 @@ func main() {
 		entry := new(SystemdJournalEntry)
 
 		if err = json.Unmarshal(line, &entry); err != nil {
-			log.Printf("Could not parse line, skipping: %s\n", line)
-		} else if pendingEntry == nil {
+			fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
+			continue
+		}
+
+		entry.process()
+
+		if pendingEntry == nil {
 			pendingEntry = entry
 		} else if !pendingEntry.sameSource(entry) {
 			go pendingEntry.send()
