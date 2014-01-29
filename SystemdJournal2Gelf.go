@@ -47,6 +47,7 @@ type SystemdJournalEntry struct {
 var messageReplace = map[*regexp.Regexp]string{
 	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "): "", //nginx
 	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+): "): "", //graylog2-server
+	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "): "", //mysqld
 }
 
 var priorities = map[string]int32{
@@ -102,7 +103,7 @@ func (this *SystemdJournalEntry) process() {
 		for idx, key := range re.SubexpNames() {
 			// no need for reflect, just define desired keys here
 			if "Priority" == key {
-				this.Priority, _ = priorities[strings.ToLower(m[idx])]
+				this.Priority = priorities[strings.ToLower(m[idx])]
 			}
 		}
 
