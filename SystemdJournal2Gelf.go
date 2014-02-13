@@ -48,6 +48,7 @@ var messageReplace = map[*regexp.Regexp]string{
 	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "): "", //nginx
 	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+): "): "", //graylog2-server
 	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "): "", //mysqld
+	regexp.MustCompile("^\\[([A-Z][a-z][a-] ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[ [0-9]+ \\] "): "", //sphinx
 }
 
 var priorities = map[string]int32{
@@ -190,7 +191,7 @@ func main() {
 		entry := new(SystemdJournalEntry)
 
 		if err = json.Unmarshal(line, &entry); err != nil {
-			fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
+//			fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
 			continue
 		}
 

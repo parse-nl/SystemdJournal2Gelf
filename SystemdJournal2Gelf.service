@@ -1,5 +1,6 @@
 [Unit]
 Description=SystemdJournal2Gelf
+After=network.target
 
 [Service]
 ExecStart=/bin/SystemdJournal2Gelf localhost:12201 --follow
@@ -7,4 +8,4 @@ Restart=on-failure
 RestartSec=30
 
 [Install]
-WantedBy=network.target
+WantedBy=multi-user.target
