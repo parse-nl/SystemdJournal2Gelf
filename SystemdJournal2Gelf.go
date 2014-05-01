@@ -49,6 +49,7 @@ var messageReplace = map[*regexp.Regexp]string{
 	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+): "): "", //graylog2-server
 	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "): "", //mysqld
 	regexp.MustCompile("^\\[([A-Z][a-z][a-] ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[ [0-9]+ \\] "): "", //sphinx
+	regexp.MustCompile("^pool [a-z]+: "): "", //php-fpm
 }
 
 var priorities = map[string]int32{
@@ -67,6 +68,12 @@ var priorities = map[string]int32{
 }
 
 func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
+	extra := map[string]interface{} {
+		"Boot_id": this.Boot_id,
+		"Pid": this.Pid,
+		"Uid": this.Uid,
+	}
+
 	if -1 != strings.Index(this.Message, "\n") {
 		this.FullMessage = this.Message
 		this.Message = strings.Split(this.Message, "\n")[0]
@@ -78,6 +85,20 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 		facility = this.Comm
 	}
 
+	if this.isJsonMessage() {
+		if err := json.Unmarshal([]byte(this.Message), &extra); err == nil {
+			if m, ok := extra["Message"]; ok {
+				this.Message = m.(string)
+				delete(extra, "Message")
+			}
+
+			if f, ok := extra["FullMessage"]; ok {
+				this.FullMessage = f.(string)
+				delete(extra, "FullMessage")
+			}
+		}
+	}
+
 	return &gelf.Message{
 		Version:	"1.0",
 		Host:		this.Hostname,
@@ -86,11 +107,7 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 		TimeUnix:	this.Realtime_timestamp / 1000 / 1000,
 		Level:		this.Priority,
 		Facility:	facility,
-		Extra:		map[string]interface{}{
-			"Boot_id":	this.Boot_id,
-			"Pid":		this.Pid,
-			"Uid":		this.Uid,
-		},
+		Extra:		extra,
 	}
 }
 
@@ -136,6 +153,10 @@ func (this *SystemdJournalEntry) send() {
 	}
 }
 
+func (this *SystemdJournalEntry) isJsonMessage() bool {
+	return len(this.Message) > 64 && this.Message[0] == '{' && this.Message[1] == '"'
+}
+
 func (this *SystemdJournalEntry) extendWith(message *SystemdJournalEntry) {
 	if this.FullMessage == "" {
 		this.FullMessage = this.Message
@@ -152,7 +173,7 @@ var (
 const (
 	WRITE_INTERVAL = 50 * time.Millisecond
 	SAMESOURCE_TIME_DIFFERENCE = 100*1000
-	JOURNAL_READER_BUFFER = 16384
+	JOURNAL_READER_BUFFER = 16384 // Larger buffer for systemd's inline coredumps which are typically ~ 14Kb
 )
 
 func main() {
@@ -179,7 +200,6 @@ func main() {
 
 	go writePendingEntry()
 
-	// Larger buffer for systemd's inline coredumps which are typically ~ 14Kb
 	r := bufio.NewReaderSize(stdout, JOURNAL_READER_BUFFER)
 	cmd.Start()
 
@@ -199,7 +219,7 @@ func main() {
 
 		if pendingEntry == nil {
 			pendingEntry = entry
-		} else if !pendingEntry.sameSource(entry) {
+		} else if !pendingEntry.sameSource(entry) || pendingEntry.isJsonMessage() {
 			go pendingEntry.send()
 			pendingEntry = entry
 		} else {
