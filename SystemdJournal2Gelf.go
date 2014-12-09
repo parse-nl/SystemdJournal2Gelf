@@ -3,14 +3,14 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/SocialCodeInc/go-gelf/gelf"
-	"io"
 	"fmt"
+	"github.com/DECK36/go-gelf/gelf"
+	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
-	"regexp"
 )
 
 /*
@@ -18,63 +18,68 @@ import (
 	https://github.com/Graylog2/graylog2-docs/wiki/GELF
 */
 type SystemdJournalEntry struct {
-	Cursor						string `json:"__CURSOR"`
-	Realtime_timestamp			int64  `json:"__REALTIME_TIMESTAMP,string"`
-	Monotonic_timestamp			string `json:"__MONOTONIC_TIMESTAMP"`
-	Boot_id						string `json:"_BOOT_ID"`
-	Transport					string `json:"_TRANSPORT"`
-	Priority					int32  `json:"PRIORITY,string"`
-	Syslog_facility				string `json:"SYSLOG_FACILITY"`
-	Syslog_identifier			string `json:"SYSLOG_IDENTIFIER"`
-	Message						string `json:"MESSAGE"`
-	Pid							string `json:"_PID"`
-	Uid							string `json:"_UID"`
-	Gid							string `json:"_GID"`
-	Comm						string `json:"_COMM"`
-	Exe							string `json:"_EXE"`
-	Cmdline						string `json:"_CMDLINE"`
-	Systemd_cgroup				string `json:"_SYSTEMD_CGROUP"`
-	Systemd_session				string `json:"_SYSTEMD_SESSION"`
-	Systemd_owner_uid			string `json:"_SYSTEMD_OWNER_UID"`
-	Systemd_unit				string `json:"_SYSTEMD_UNIT"`
-	Source_realtime_timestamp	string `json:"_SOURCE_REALTIME_TIMESTAMP"`
-	Machine_id					string `json:"_MACHINE_ID"`
-	Hostname					string `json:"_HOSTNAME"`
-	FullMessage					string
+	Cursor                    string `json:"__CURSOR"`
+	Realtime_timestamp        int64  `json:"__REALTIME_TIMESTAMP,string"`
+	Monotonic_timestamp       string `json:"__MONOTONIC_TIMESTAMP"`
+	Boot_id                   string `json:"_BOOT_ID"`
+	Transport                 string `json:"_TRANSPORT"`
+	Priority                  int32  `json:"PRIORITY,string"`
+	Syslog_facility           string `json:"SYSLOG_FACILITY"`
+	Syslog_identifier         string `json:"SYSLOG_IDENTIFIER"`
+	Message                   string `json:"MESSAGE"`
+	Pid                       string `json:"_PID"`
+	Uid                       string `json:"_UID"`
+	Gid                       string `json:"_GID"`
+	Comm                      string `json:"_COMM"`
+	Exe                       string `json:"_EXE"`
+	Cmdline                   string `json:"_CMDLINE"`
+	Systemd_cgroup            string `json:"_SYSTEMD_CGROUP"`
+	Systemd_session           string `json:"_SYSTEMD_SESSION"`
+	Systemd_owner_uid         string `json:"_SYSTEMD_OWNER_UID"`
+	Systemd_unit              string `json:"_SYSTEMD_UNIT"`
+	Source_realtime_timestamp string `json:"_SOURCE_REALTIME_TIMESTAMP"`
+	Machine_id                string `json:"_MACHINE_ID"`
+	Hostname                  string `json:"_HOSTNAME"`
+	FullMessage               string
 }
 
-// Use named subpatterns to override other fields
+// Strip date from message-content. Use named subpatterns to override other fields
 var messageReplace = map[*regexp.Regexp]string{
-	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "): "", //nginx
-	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+): "): "", //graylog2-server
-	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "): "", //mysqld
+	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "):            "", //nginx
+	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+) : "):       "", //graylog2-server
+	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "):                                     "", //mysqld
 	regexp.MustCompile("^\\[([A-Z][a-z][a-] ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[ [0-9]+ \\] "): "", //sphinx
-	regexp.MustCompile("^pool [a-z]+: "): "", //php-fpm
+	regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "):                              "", //jenkins
+	regexp.MustCompile("^pool [a-z]+: "):                                                                                              "", //php-fpm
 }
 
 var priorities = map[string]int32{
-	"emergency":0,
-	"emerg":	0,
-	"alert":	1,
-	"critical":	2,
-	"crit":		2,
-	"error":	3,
-	"err":		3,
-	"warning":	4,
-	"warn":		4,
-	"notice":	5,
-	"info":		6,
-	"debug":	7,
+	"emergency": 0,
+	"emerg":     0,
+	"alert":     1,
+	"critical":  2,
+	"crit":      2,
+	"error":     3,
+	"err":       3,
+	"warning":   4,
+	"warn":      4,
+	"notice":    5,
+	"info":      6,
+	"debug":     7,
 }
 
-func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
-	extra := map[string]interface{} {
+func (this *SystemdJournalEntry) toGelf() *gelf.Message {
+	var extra = map[string]interface{}{
 		"Boot_id": this.Boot_id,
-		"Pid": this.Pid,
-		"Uid": this.Uid,
+		"Pid":     this.Pid,
+		"Uid":     this.Uid,
 	}
 
-	if -1 != strings.Index(this.Message, "\n") {
+	if this.isJsonMessage() {
+		if err := json.Unmarshal([]byte(this.Message), &extra); err == nil {
+			this.Message = extra["Message"].(string)
+		}
+	} else if -1 != strings.Index(this.Message, "\n") {
 		this.FullMessage = this.Message
 		this.Message = strings.Split(this.Message, "\n")[0]
 	}
@@ -100,14 +105,14 @@ func (this *SystemdJournalEntry) toGelf() (*gelf.Message) {
 	}
 
 	return &gelf.Message{
-		Version:	"1.0",
-		Host:		this.Hostname,
-		Short:		this.Message,
-		Full:		this.FullMessage,
-		TimeUnix:	this.Realtime_timestamp / 1000 / 1000,
-		Level:		this.Priority,
-		Facility:	facility,
-		Extra:		extra,
+		Version:  "1.1",
+		Host:     this.Hostname,
+		Short:    this.Message,
+		Full:     this.FullMessage,
+		TimeUnix: float64(this.Realtime_timestamp) / 1000 / 1000,
+		Level:    this.Priority,
+		Facility: facility,
+		Extra:    extra,
 	}
 }
 
@@ -171,9 +176,10 @@ var (
 )
 
 const (
-	WRITE_INTERVAL = 50 * time.Millisecond
-	SAMESOURCE_TIME_DIFFERENCE = 100*1000
-	JOURNAL_READER_BUFFER = 16384 // Larger buffer for systemd's inline coredumps which are typically ~ 14Kb
+	WRITE_INTERVAL             = 50 * time.Millisecond
+	SAMESOURCE_TIME_DIFFERENCE = 100 * 1000
+	// Systemd's inline coredumps are typically ~ 14Kb
+	JOURNAL_READER_BUFFER = 16384
 )
 
 func main() {
@@ -208,10 +214,9 @@ func main() {
 			break
 		}
 
-		entry := new(SystemdJournalEntry)
-
+		var entry = &SystemdJournalEntry{}
 		if err = json.Unmarshal(line, &entry); err != nil {
-//			fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
+			//fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
 			continue
 		}
 
@@ -238,12 +243,12 @@ func main() {
 
 /*
  * Sleep for WritePending_interval, then check if
-*/
+ */
 func writePendingEntry() {
 	for {
 		time.Sleep(WRITE_INTERVAL)
 
-		if pendingEntry != nil && (time.Now().UnixNano() / 1000 - pendingEntry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
+		if pendingEntry != nil && (time.Now().UnixNano()/1000-pendingEntry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
 			go pendingEntry.send()
 			pendingEntry = nil
 		}

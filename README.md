@@ -10,7 +10,7 @@ Tested on go1.1 on Archlinux using systemd-204. Inspired by https://github.com/s
 Dependencies:
 -------------
 
-- https://github.com/SocialCodeInc/go-gelf
+- https://github.com/DECK36/go-gelf
 - Google go
 
 
@@ -18,7 +18,7 @@ Compile
 -------
 
 ```
-go get github.com/SocialCodeInc/go-gelf/gelf
+go get github.com/DECK36/go-gelf/gelf
 go build SystemdJournal2Gelf.go
 ```
 
