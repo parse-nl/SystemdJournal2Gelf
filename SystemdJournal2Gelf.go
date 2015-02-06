@@ -75,15 +75,6 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 		"Uid":     this.Uid,
 	}
 
-	if this.isJsonMessage() {
-		if err := json.Unmarshal([]byte(this.Message), &extra); err == nil {
-			this.Message = extra["Message"].(string)
-		}
-	} else if -1 != strings.Index(this.Message, "\n") {
-		this.FullMessage = this.Message
-		this.Message = strings.Split(this.Message, "\n")[0]
-	}
-
 	// php-fpm refuses to fill identifier
 	facility := this.Syslog_identifier
 	if "" == facility {
@@ -102,6 +93,9 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 				delete(extra, "FullMessage")
 			}
 		}
+	} else if -1 != strings.Index(this.Message, "\n") {
+		this.FullMessage = this.Message
+		this.Message = strings.Split(this.Message, "\n")[0]
 	}
 
 	return &gelf.Message{
@@ -119,18 +113,21 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 func (this *SystemdJournalEntry) process() {
 	for re, replace := range messageReplace {
 		m := re.FindStringSubmatch(this.Message)
-		if nil == m {
+		if m == nil {
 			continue
 		}
 
+		// Store subpatterns in fields
 		for idx, key := range re.SubexpNames() {
-			// no need for reflect, just define desired keys here
 			if "Priority" == key {
 				this.Priority = priorities[strings.ToLower(m[idx])]
 			}
 		}
 
 		this.Message = re.ReplaceAllString(this.Message, replace)
+
+		// We won't match multiple replaces
+		break
 	}
 }
 
@@ -153,7 +150,7 @@ func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
 func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
-	if err := gelfWriter.WriteMessage(message); err != nil {
+	if err := writer.WriteMessage(message); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 }
@@ -172,14 +169,12 @@ func (this *SystemdJournalEntry) extendWith(message *SystemdJournalEntry) {
 
 var (
 	pendingEntry *SystemdJournalEntry
-	gelfWriter   *gelf.Writer
+	writer       *gelf.Writer
 )
 
 const (
 	WRITE_INTERVAL             = 50 * time.Millisecond
 	SAMESOURCE_TIME_DIFFERENCE = 100 * 1000
-	// Systemd's inline coredumps are typically ~ 14Kb
-	JOURNAL_READER_BUFFER = 16384
 )
 
 func main() {
@@ -188,34 +183,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	serverAddr := os.Args[1]
+	if w, err := gelf.NewWriter(os.Args[1]); err != nil {
+		fmt.Fprintf(os.Stderr, "While connecting to Graylog server: %s\n", err)
+		os.Exit(1)
+	} else {
+		writer = w
+	}
+
 	journalArgs := []string{"--all", "--output=json"}
 	journalArgs = append(journalArgs, os.Args[2:]...)
 	cmd := exec.Command("journalctl", journalArgs...)
 
-	var err error
-	gelfWriter, err = gelf.NewWriter(serverAddr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "While connecting to Graylog server: %s\n", err)
-		os.Exit(1)
-	}
-
-	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	go io.Copy(os.Stderr, stderr)
+	stdout, _ := cmd.StdoutPipe()
+	s := bufio.NewScanner(stdout)
 
 	go writePendingEntry()
 
-	r := bufio.NewReaderSize(stdout, JOURNAL_READER_BUFFER)
 	cmd.Start()
 
-	for line, _, err := r.ReadLine(); err != io.EOF; line, _, err = r.ReadLine() {
-		if err != nil {
-			break
-		}
+	for s.Scan() {
+		line := s.Text()
 
 		var entry = &SystemdJournalEntry{}
-		if err = json.Unmarshal(line, &entry); err != nil {
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			//fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
 			continue
 		}
@@ -225,7 +217,7 @@ func main() {
 		if pendingEntry == nil {
 			pendingEntry = entry
 		} else if !pendingEntry.sameSource(entry) || pendingEntry.isJsonMessage() {
-			go pendingEntry.send()
+			pendingEntry.send()
 			pendingEntry = entry
 		} else {
 			pendingEntry.extendWith(entry)
@@ -238,19 +230,25 @@ func main() {
 		time.Sleep(1 * time.Millisecond)
 	}
 
+	if err := s.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error from journalctl: %s\n", err)
+	}
+
 	cmd.Wait()
+	pendingEntry.send()
 }
 
-/*
- * Sleep for WritePending_interval, then check if
- */
 func writePendingEntry() {
+	var entry *SystemdJournalEntry
+
 	for {
 		time.Sleep(WRITE_INTERVAL)
 
 		if pendingEntry != nil && (time.Now().UnixNano()/1000-pendingEntry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
-			go pendingEntry.send()
+			entry = pendingEntry
 			pendingEntry = nil
+
+			entry.send()
 		}
 	}
 }
