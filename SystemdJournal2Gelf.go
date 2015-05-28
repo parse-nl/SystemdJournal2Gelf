@@ -50,7 +50,8 @@ var messageReplace = map[*regexp.Regexp]string{
 	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "):                                     "", //mysqld
 	regexp.MustCompile("^\\[([A-Z][a-z][a-] ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[ [0-9]+ \\] "): "", //sphinx
 	regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "):                              "", //jenkins
-	regexp.MustCompile("^pool [a-z]+: "):                                                                                              "", //php-fpm
+	regexp.MustCompile("^pool [a-z_0-9]+: "):                                                                                          "", //php-fpm
+	regexp.MustCompile("^\\[[0-9A-Z]\\] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] INFO: "):                                                     "", //syncthing
 }
 
 var priorities = map[string]int32{
@@ -231,7 +232,8 @@ func main() {
 	}
 
 	if err := s.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error from journalctl: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Error from Scanner: %s\n", err)
+		cmd.Process.Kill()
 	}
 
 	cmd.Wait()
