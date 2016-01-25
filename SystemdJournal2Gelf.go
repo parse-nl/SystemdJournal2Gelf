@@ -151,8 +151,21 @@ func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
 func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
-	if err := writer.WriteMessage(message); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	retryAfter := SEND_ERROR_RETRY_WAIT
+	for err := writer.WriteMessage(message); err != nil; err = writer.WriteMessage(message) {
+		time.Sleep(retryAfter)
+
+		if retryAfter < 1 * time.Minute {
+			// Slowly increase, will take 3.4 minutes (50 + 100 ... + 102400 ms) to reach max of 1.7 minutes (102400 ms)
+			retryAfter *= 2
+		} else {
+			fmt.Fprintf(os.Stderr, "Paused message processing due to %s\n", err)
+		}
+	}
+
+	if retryAfter > SEND_ERROR_RETRY_WAIT {
+		messageTime := time.Unix(int64(message.TimeUnix), 0)
+		fmt.Fprintf(os.Stderr, "Resuming message processing after %d seconds\n", time.Now().Sub(messageTime)/time.Second)
 	}
 }
 
@@ -176,6 +189,7 @@ var (
 const (
 	WRITE_INTERVAL             = 50 * time.Millisecond
 	SAMESOURCE_TIME_DIFFERENCE = 100 * 1000
+	SEND_ERROR_RETRY_WAIT      = 50 * time.Millisecond
 )
 
 func main() {
