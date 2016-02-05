@@ -118,6 +118,10 @@ func (this *SystemdJournalEntry) process() {
 
 	re := messageReplace[ this.Syslog_identifier ]
 	if nil == re {
+		re = messageReplace[ this.Comm ]
+	}
+
+	if nil == re {
 		return
 	}
 
