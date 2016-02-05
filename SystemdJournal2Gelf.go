@@ -44,14 +44,15 @@ type SystemdJournalEntry struct {
 }
 
 // Strip date from message-content. Use named subpatterns to override other fields
-var messageReplace = map[*regexp.Regexp]string{
-	regexp.MustCompile("^20[0-9][0-9]/[01][0-9]/[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[a-z]+)\\] "):            "", //nginx
-	regexp.MustCompile("^20[0-9][0-9]-[01][0-9]-[0123][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3} (?P<Priority>[A-Z]+) : "):       "", //graylog2-server
-	regexp.MustCompile("^[0-9]{6} [0-1]?[0-9]:[0-5][0-9]:[0-5][0-9] \\[(?P<Priority>[A-Z]+)\\] "):                                     "", //mysqld
-	regexp.MustCompile("^\\[([A-Z][a-z][a-] ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[ [0-9]+ \\] "): "", //sphinx
-	regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "):                              "", //jenkins
-	regexp.MustCompile("^pool [a-z_0-9]+: "):                                                                                          "", //php-fpm
-	regexp.MustCompile("^\\[[0-9A-Z]\\] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] INFO: "):                                                     "", //syncthing
+var messageReplace = map[string]*regexp.Regexp{
+	"*":         regexp.MustCompile("^20[0-9][0-9][/\\-][01][0-9][/\\-][0123][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9][,0-9]{0-3} "),
+	"nginx":     regexp.MustCompile("\\[(?P<Priority>[a-z]+)\\] "),
+	"java":      regexp.MustCompile("(?P<Priority>[A-Z]+): "),
+	"mysqld":    regexp.MustCompile("^[0-9]+ \\[(?P<Priority>[A-Z][a-z]+)\\] "),
+	"searchd":   regexp.MustCompile("^\\[([A-Z][a-z]{2} ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[[ 0-9]+\\] "),
+	"jenkins":   regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "),
+	"php-fpm":   regexp.MustCompile("^pool [a-z_0-9]+: "),
+	"syncthing": regexp.MustCompile("^\\[[0-9A-Z]{5}\\] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] (?P<Priority>INFO): "),
 }
 
 var priorities = map[string]int32{
@@ -112,24 +113,27 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 }
 
 func (this *SystemdJournalEntry) process() {
-	for re, replace := range messageReplace {
-		m := re.FindStringSubmatch(this.Message)
-		if m == nil {
-			continue
-		}
+	// Replace generic timestamp
+	this.Message = messageReplace["*"].ReplaceAllString(this.Message, "")
 
-		// Store subpatterns in fields
-		for idx, key := range re.SubexpNames() {
-			if "Priority" == key {
-				this.Priority = priorities[strings.ToLower(m[idx])]
-			}
-		}
-
-		this.Message = re.ReplaceAllString(this.Message, replace)
-
-		// We won't match multiple replaces
-		break
+	re := messageReplace[ this.Syslog_identifier ]
+	if nil == re {
+		return
 	}
+
+	m := re.FindStringSubmatch(this.Message)
+	if m == nil {
+		return
+	}
+
+	// Store subpatterns in fields
+	for idx, key := range re.SubexpNames() {
+		if "Priority" == key {
+			this.Priority = priorities[strings.ToLower(m[idx])]
+		}
+	}
+
+	this.Message = re.ReplaceAllString(this.Message, "")
 }
 
 func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
