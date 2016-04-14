@@ -242,6 +242,7 @@ func main() {
 	if err := s.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error from Scanner: %s\n", err)
 		cmd.Process.Kill()
+		os.Exit(1)
 	}
 
 	cmd.Wait()
