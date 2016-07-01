@@ -51,7 +51,7 @@ var messageReplace = map[string]*regexp.Regexp{
 	"mysqld":    regexp.MustCompile("^[0-9]+ \\[(?P<Priority>[A-Z][a-z]+)\\] "),
 	"searchd":   regexp.MustCompile("^\\[([A-Z][a-z]{2} ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[[ 0-9]+\\] "),
 	"jenkins":   regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "),
-	"php-fpm":   regexp.MustCompile("^pool [a-z_0-9\\[\\]]+: "),
+	"php-fpm":   regexp.MustCompile("^pool [a-z_0-9\\[\\]\\-]+: "),
 	"syncthing": regexp.MustCompile("^\\[[0-9A-Z]{5}\\] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] (?P<Priority>INFO): "),
 }
 
