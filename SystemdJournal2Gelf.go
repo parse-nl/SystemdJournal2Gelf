@@ -160,7 +160,13 @@ func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
 	if err := writer.WriteMessage(message); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		/*
+			UDP is nonblocking, but the os stores an error which GO will return on the next call.
+			This means we've already lost a message, but can keep retrying the current one. Sleep to make this less obtrusive
+		*/
+		fmt.Fprintln(os.Stderr, "Processing paused because of: " +err.Error())
+		time.Sleep(SLEEP_AFTER_ERROR)
+		this.send()
 	}
 }
 
@@ -184,6 +190,7 @@ var (
 const (
 	WRITE_INTERVAL             = 50 * time.Millisecond
 	SAMESOURCE_TIME_DIFFERENCE = 100 * 1000
+	SLEEP_AFTER_ERROR          = 15 * time.Second
 )
 
 func main() {
