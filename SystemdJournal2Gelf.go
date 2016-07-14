@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"sync"
 )
 
 /*
@@ -183,7 +184,10 @@ func (this *SystemdJournalEntry) extendWith(message *SystemdJournalEntry) {
 }
 
 var (
-	pendingEntry *SystemdJournalEntry
+	pending struct{
+		sync.RWMutex
+		entry *SystemdJournalEntry
+	}
 	writer       *gelf.Writer
 )
 
@@ -230,17 +234,21 @@ func main() {
 
 		entry.process()
 
-		if pendingEntry == nil {
-			pendingEntry = entry
-		} else if !pendingEntry.sameSource(entry) || pendingEntry.isJsonMessage() {
-			pendingEntry.send()
-			pendingEntry = entry
+		pending.Lock()
+
+		if pending.entry == nil {
+			pending.entry = entry
+		} else if !pending.entry.sameSource(entry) || pending.entry.isJsonMessage() {
+			pending.entry.send()
+			pending.entry = entry
 		} else {
-			pendingEntry.extendWith(entry)
+			pending.entry.extendWith(entry)
 
 			// Keeps writePendingEntry waiting longer for us to append even more
-			pendingEntry.Realtime_timestamp = entry.Realtime_timestamp
+			pending.entry.Realtime_timestamp = entry.Realtime_timestamp
 		}
+
+		pending.Unlock()
 
 		// Prevent saturation and throttling
 		time.Sleep(1 * time.Millisecond)
@@ -253,7 +261,7 @@ func main() {
 	}
 
 	cmd.Wait()
-	pendingEntry.send()
+	pending.entry.send()
 }
 
 func writePendingEntry() {
@@ -262,9 +270,11 @@ func writePendingEntry() {
 	for {
 		time.Sleep(WRITE_INTERVAL)
 
-		if pendingEntry != nil && (time.Now().UnixNano()/1000-pendingEntry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
-			entry = pendingEntry
-			pendingEntry = nil
+		if pending.entry != nil && (time.Now().UnixNano()/1000-pending.entry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
+			pending.Lock()
+			entry = pending.entry
+			pending.entry = nil
+			pending.Unlock()
 
 			entry.send()
 		}
