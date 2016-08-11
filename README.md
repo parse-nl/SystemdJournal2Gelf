@@ -1,27 +1,29 @@
 SystemdJournal2Gelf
 ===================
 
-Export entries from systemd's journal and send them to a graylog server using gelf. This script
-is written in go to make it easier to compile and distribute to your machines.
-
-Tested on go1.5 on Archlinux using systemd-228. Inspired by https://github.com/systemd/journal2gelf
-
+Export entries from systemd's journal and send them to a Graylog server using gelf. This script
+is written in Google go to make it easier to compile and distribute to your machines.
 
 Dependencies:
 -------------
 
-- https://github.com/DECK36/go-gelf
+- https://github.com/parse-nl/go-gelf
 - Google go
 
 
-Compile
+Install or Compile
 -------
 
+Compile this package by checking out the repo and run:
+
 ```
-go get github.com/DECK36/go-gelf/gelf
+go get github.com/parse-nl/go-gelf/gelf
 go build SystemdJournal2Gelf.go
 ```
 
+Or install the package for:
+
+* [Archlinux](https://aur.archlinux.org/packages/systemdjournal2gelf/)
 
 Running as a service
 --------------------
@@ -53,6 +55,6 @@ SystemdJournal2Gelf localhost:11201 --follow
 
 License
 -------
-Copyright (c) 2013, React B.V.
+Copyright (c) 2016, Parse Software Development B.V.
 
 Released under the Simplified BSD license, see LICENSE for details.
