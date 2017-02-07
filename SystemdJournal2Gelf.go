@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/parse-nl/go-gelf/gelf"
+	"github.com/DECK36/go-gelf/gelf"
 	"io"
 	"os"
 	"os/exec"

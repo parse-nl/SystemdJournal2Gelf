@@ -7,19 +7,20 @@ is written in Google go to make it easier to compile and distribute to your mach
 Dependencies:
 -------------
 
-- https://github.com/parse-nl/go-gelf
-- Google go
+- this repo includes https://github.com/DECK36/go-gelf
+- Google golang
 
 
-Install or Compile
--------
+Install / Compile
+-----------------
 
 Compile this package by checking out the repo and run:
 
 ```
-go get github.com/parse-nl/go-gelf/gelf
-go build SystemdJournal2Gelf.go
+go get github.com/parse-nl/SystemdJournal2Gelf
 ```
+
+The binary will be compiled in $GOPATH/bin/SystemdJournal2Gelf
 
 Or install the package for:
 
@@ -52,9 +53,14 @@ SystemdJournal2Gelf localhost:11201 --merge
 SystemdJournal2Gelf localhost:11201 --follow
 ```
 
+Logging additional properties:
+------------------------------
+
+This script supports a special syntax to send additional properties; when you log a JSON encoded
+object in the Message field [it Unmarshalls](https://github.com/parse-nl/SystemdJournal2Gelf/blob/master/SystemdJournal2Gelf.go#L87) it for you
 
 License
 -------
-Copyright (c) 2016, Parse Software Development B.V.
+Copyright (c) 2016-2017, Parse Software Development B.V.
 
 Released under the Simplified BSD license, see LICENSE for details.
