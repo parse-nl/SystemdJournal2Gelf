@@ -141,22 +141,6 @@ func (this *SystemdJournalEntry) process() {
 	this.Message = re.ReplaceAllString(this.Message, "")
 }
 
-func (this *SystemdJournalEntry) sameSource(message *SystemdJournalEntry) bool {
-	if this.Syslog_identifier != message.Syslog_identifier {
-		return false
-	}
-
-	if this.Priority != message.Priority {
-		return false
-	}
-
-	if this.Realtime_timestamp-message.Realtime_timestamp > SAMESOURCE_TIME_DIFFERENCE {
-		return false
-	}
-
-	return true
-}
-
 func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
@@ -173,14 +157,6 @@ func (this *SystemdJournalEntry) send() {
 
 func (this *SystemdJournalEntry) isJsonMessage() bool {
 	return len(this.Message) > 64 && this.Message[0] == '{' && this.Message[1] == '"'
-}
-
-func (this *SystemdJournalEntry) extendWith(message *SystemdJournalEntry) {
-	if this.FullMessage == "" {
-		this.FullMessage = this.Message
-	}
-
-	this.FullMessage += "\n" + message.Message
 }
 
 var (
@@ -238,14 +214,9 @@ func main() {
 
 		if pending.entry == nil {
 			pending.entry = entry
-		} else if !pending.entry.sameSource(entry) || pending.entry.isJsonMessage() {
+		} else {
 			pending.entry.send()
 			pending.entry = entry
-		} else {
-			pending.entry.extendWith(entry)
-
-			// Keeps writePendingEntry waiting longer for us to append even more
-			pending.entry.Realtime_timestamp = entry.Realtime_timestamp
 		}
 
 		pending.Unlock()
