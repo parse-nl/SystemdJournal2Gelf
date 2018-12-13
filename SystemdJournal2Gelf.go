@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 	"sync"
+	"time"
 )
 
 /*
@@ -80,7 +80,7 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 
 	// php-fpm refuses to fill identifier
 	facility := this.Syslog_identifier
-	if "" == facility {
+	if "php" == facility && "php-fpm" == this.Comm {
 		facility = this.Comm
 	}
 
@@ -117,9 +117,9 @@ func (this *SystemdJournalEntry) process() {
 	// Replace generic timestamp
 	this.Message = messageReplace["*"].ReplaceAllString(this.Message, "")
 
-	re := messageReplace[ this.Syslog_identifier ]
+	re := messageReplace[this.Syslog_identifier]
 	if nil == re {
-		re = messageReplace[ this.Comm ]
+		re = messageReplace[this.Comm]
 	}
 
 	if nil == re {
@@ -149,7 +149,7 @@ func (this *SystemdJournalEntry) send() {
 			UDP is nonblocking, but the os stores an error which GO will return on the next call.
 			This means we've already lost a message, but can keep retrying the current one. Sleep to make this less obtrusive
 		*/
-		fmt.Fprintln(os.Stderr, "Processing paused because of: " +err.Error())
+		fmt.Fprintln(os.Stderr, "Processing paused because of: "+err.Error())
 		time.Sleep(SLEEP_AFTER_ERROR)
 		this.send()
 	}
@@ -160,11 +160,11 @@ func (this *SystemdJournalEntry) isJsonMessage() bool {
 }
 
 var (
-	pending struct{
+	pending struct {
 		sync.RWMutex
 		entry *SystemdJournalEntry
 	}
-	writer       *gelf.Writer
+	writer *gelf.Writer
 )
 
 const (
