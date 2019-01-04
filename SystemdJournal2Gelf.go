@@ -80,7 +80,7 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 
 	// php-fpm refuses to fill identifier
 	facility := this.Syslog_identifier
-	if "php" == facility && "php-fpm" == this.Comm {
+	if "php-fpm" == this.Comm {
 		facility = this.Comm
 	}
 
