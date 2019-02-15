@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/DECK36/go-gelf/gelf"
@@ -41,7 +40,7 @@ type SystemdJournalEntry struct {
 	Source_realtime_timestamp string `json:"_SOURCE_REALTIME_TIMESTAMP"`
 	Machine_id                string `json:"_MACHINE_ID"`
 	Hostname                  string `json:"_HOSTNAME"`
-	FullMessage               string
+	FullMessage               string `json:"-"`
 }
 
 // Strip date from message-content. Use named subpatterns to override other fields
@@ -113,6 +112,7 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 	}
 }
 
+// FIXME remove in favor of Graylogs extractors?
 func (this *SystemdJournalEntry) process() {
 	// Replace generic timestamp
 	this.Message = messageReplace["*"].ReplaceAllString(this.Message, "")
@@ -144,28 +144,57 @@ func (this *SystemdJournalEntry) process() {
 func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
-	if err := writer.WriteMessage(message); err != nil {
+	for err := writer.WriteMessage(message); err != nil; err = writer.WriteMessage(message) {
 		/*
-			UDP is nonblocking, but the os stores an error which GO will return on the next call.
+			UDP is nonblocking, but the OS stores an error which GO will return on the next call.
 			This means we've already lost a message, but can keep retrying the current one. Sleep to make this less obtrusive
 		*/
-		fmt.Fprintln(os.Stderr, "Processing paused because of: "+err.Error())
+		fmt.Fprintln(os.Stderr, "send - processing paused because of: "+err.Error())
 		time.Sleep(SLEEP_AFTER_ERROR)
-		this.send()
 	}
 }
 
 func (this *SystemdJournalEntry) isJsonMessage() bool {
-	return len(this.Message) > 64 && this.Message[0] == '{' && this.Message[1] == '"'
+	return len(this.Message) > 64 && this.Message[0:2] == `{"`
 }
 
-var (
-	pending struct {
-		sync.RWMutex
-		entry *SystemdJournalEntry
+type pendingEntry struct {
+	sync.RWMutex
+	entry *SystemdJournalEntry
+}
+
+func (this *pendingEntry) Push(next SystemdJournalEntry) {
+	this.Lock()
+
+	if this.entry != nil {
+		this.entry.send()
 	}
-	writer *gelf.Writer
-)
+
+	this.entry = &next
+	this.Unlock()
+}
+
+func (this *pendingEntry) Clear() {
+	if this.entry == nil {
+		return
+	}
+
+	this.Lock()
+	entry := this.entry
+	this.entry = nil
+	this.Unlock()
+
+	entry.send()
+}
+
+func (this *pendingEntry) ClearEvery(interval time.Duration) {
+	for {
+		time.Sleep(interval)
+		this.Clear()
+	}
+}
+
+var writer *gelf.Writer
 
 const (
 	WRITE_INTERVAL             = 50 * time.Millisecond
@@ -175,13 +204,11 @@ const (
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Pass server:12201 as first argument and append journalctl parameters to use")
-		os.Exit(1)
+		panic("usage: SystemdJournal2Gelf SERVER:12201 [JOURNALCTL PARAMETERS]")
 	}
 
 	if w, err := gelf.NewWriter(os.Args[1]); err != nil {
-		fmt.Fprintf(os.Stderr, "While connecting to Graylog server: %s\n", err)
-		os.Exit(1)
+		panic("while connecting to Graylog server: " + err.Error())
 	} else {
 		writer = w
 	}
@@ -191,63 +218,34 @@ func main() {
 	cmd := exec.Command("journalctl", journalArgs...)
 
 	stderr, _ := cmd.StderrPipe()
-	go io.Copy(os.Stderr, stderr)
 	stdout, _ := cmd.StdoutPipe()
-	s := bufio.NewScanner(stdout)
+	go io.Copy(os.Stderr, stderr)
+	d := json.NewDecoder(stdout)
 
-	go writePendingEntry()
-
+	var pending pendingEntry
+	go pending.ClearEvery(WRITE_INTERVAL)
 	cmd.Start()
 
-	for s.Scan() {
-		line := s.Text()
+	for {
+		var entry SystemdJournalEntry
+		if err := d.Decode(&entry); err != nil {
+			if err == io.EOF {
+				break
+			}
 
-		var entry = &SystemdJournalEntry{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			//fmt.Fprintf(os.Stderr, "Could not parse line, skipping: %s\n", line)
-			continue
+			cmd.Process.Kill()
+			panic("could not parse journal output: " + err.Error())
 		}
 
 		entry.process()
 
-		pending.Lock()
-
-		if pending.entry == nil {
-			pending.entry = entry
-		} else {
-			pending.entry.send()
-			pending.entry = entry
-		}
-
-		pending.Unlock()
+		pending.Push(entry)
 
 		// Prevent saturation and throttling
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	if err := s.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error from Scanner: %s\n", err)
-		cmd.Process.Kill()
-		os.Exit(1)
-	}
-
 	cmd.Wait()
-	pending.entry.send()
-}
 
-func writePendingEntry() {
-	var entry *SystemdJournalEntry
-
-	for {
-		time.Sleep(WRITE_INTERVAL)
-
-		if pending.entry != nil && (time.Now().UnixNano()/1000-pending.entry.Realtime_timestamp) > SAMESOURCE_TIME_DIFFERENCE {
-			pending.Lock()
-			entry = pending.entry
-			pending.entry = nil
-			pending.Unlock()
-
-			entry.send()
-		}
-	}
+	pending.Clear()
 }
