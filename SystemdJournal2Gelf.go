@@ -141,6 +141,32 @@ func (this *SystemdJournalEntry) process() {
 	this.Message = re.ReplaceAllString(this.Message, "")
 }
 
+// Custom wrapper to support unprintable chars in message
+func (this *SystemdJournalEntry) UnmarshalJSON(data []byte) error {
+	// use an alias to prevent recursion
+	type entryAlias SystemdJournalEntry
+	aux := (*entryAlias)(this)
+
+	if err := json.Unmarshal(data, &aux); err == nil {
+		return nil
+	} else if ute, ok := err.(*json.UnmarshalTypeError); ok && ute.Field == "MESSAGE" && ute.Value == "array" {
+		// Include brackets, which is why we subtract and add by one
+		len := int64(strings.Index(string(data[ute.Offset:]), `]`)) + 1
+
+		var message []byte
+		if err := json.Unmarshal(data[ute.Offset-1:ute.Offset+len], &message); err != nil {
+			return err
+		}
+
+		// only the failing field is skipped, so we can still use the rest
+		this.Message = string(message)
+
+		return nil
+	} else {
+		return err
+	}
+}
+
 func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
@@ -155,7 +181,7 @@ func (this *SystemdJournalEntry) send() {
 }
 
 func (this *SystemdJournalEntry) isJsonMessage() bool {
-	return len(this.Message) > 64 && this.Message[0:2] == `{"`
+	return this.Message[0:2] == `{"`
 }
 
 type pendingEntry struct {
