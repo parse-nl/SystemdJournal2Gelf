@@ -43,44 +43,15 @@ type SystemdJournalEntry struct {
 	FullMessage               string `json:"-"`
 }
 
-// Strip date from message-content. Use named subpatterns to override other fields
-var messageReplace = map[string]*regexp.Regexp{
-	"*":         regexp.MustCompile("^20[0-9][0-9][/\\-][01][0-9][/\\-][0123][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9][,0-9]{0-3} "),
-	"nginx":     regexp.MustCompile("\\[(?P<Priority>[a-z]+)\\] "),
-	"java":      regexp.MustCompile("(?P<Priority>[A-Z]+): "),
-	"mysqld":    regexp.MustCompile("^[0-9]+ \\[(?P<Priority>[A-Z][a-z]+)\\] "),
-	"searchd":   regexp.MustCompile("^\\[([A-Z][a-z]{2} ){2} [0-9]+ [0-2][0-9]:[0-5][0-9]:[0-5][0-9]\\.[0-9]{3} 20[0-9][0-9]\\] \\[[ 0-9]+\\] "),
-	"jenkins":   regexp.MustCompile("^[A-Z][a-z]{2} [01][0-9], 20[0-9][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9] [AP]M "),
-	"php-fpm":   regexp.MustCompile("^pool [a-z_0-9\\[\\]\\-]+: "),
-	"syncthing": regexp.MustCompile("^\\[[0-9A-Z]{5}\\] [0-2][0-9]:[0-5][0-9]:[0-5][0-9] (?P<Priority>INFO): "),
-}
-
-var priorities = map[string]int32{
-	"emergency": 0,
-	"emerg":     0,
-	"alert":     1,
-	"critical":  2,
-	"crit":      2,
-	"error":     3,
-	"err":       3,
-	"warning":   4,
-	"warn":      4,
-	"notice":    5,
-	"info":      6,
-	"debug":     7,
-}
+// Strip date from message-content
+var startsWithTimestamp = regexp.MustCompile("^20[0-9][0-9][/\\-][01][0-9][/\\-][0123][0-9] [0-2]?[0-9]:[0-5][0-9]:[0-5][0-9][,0-9]{0,3} ")
 
 func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 	var extra = map[string]interface{}{
-		"Boot_id": this.Boot_id,
-		"Pid":     this.Pid,
-		"Uid":     this.Uid,
-	}
-
-	// php-fpm refuses to fill identifier
-	facility := this.Syslog_identifier
-	if "php-fpm" == this.Comm {
-		facility = this.Comm
+		"Boot_id":      this.Boot_id,
+		"Pid":          this.Pid,
+		"Uid":          this.Uid,
+		"Systemd_unit": this.Systemd_unit,
 	}
 
 	if this.isJsonMessage() {
@@ -107,38 +78,9 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 		Full:     this.FullMessage,
 		TimeUnix: float64(this.Realtime_timestamp) / 1000 / 1000,
 		Level:    this.Priority,
-		Facility: facility,
+		Facility: this.Syslog_identifier,
 		Extra:    extra,
 	}
-}
-
-// FIXME remove in favor of Graylogs extractors?
-func (this *SystemdJournalEntry) process() {
-	// Replace generic timestamp
-	this.Message = messageReplace["*"].ReplaceAllString(this.Message, "")
-
-	re := messageReplace[this.Syslog_identifier]
-	if nil == re {
-		re = messageReplace[this.Comm]
-	}
-
-	if nil == re {
-		return
-	}
-
-	m := re.FindStringSubmatch(this.Message)
-	if m == nil {
-		return
-	}
-
-	// Store subpatterns in fields
-	for idx, key := range re.SubexpNames() {
-		if "Priority" == key {
-			this.Priority = priorities[strings.ToLower(m[idx])]
-		}
-	}
-
-	this.Message = re.ReplaceAllString(this.Message, "")
 }
 
 // Custom wrapper to support unprintable chars in message
@@ -148,6 +90,8 @@ func (this *SystemdJournalEntry) UnmarshalJSON(data []byte) error {
 	aux := (*entryAlias)(this)
 
 	if err := json.Unmarshal(data, &aux); err == nil {
+		this.Message = startsWithTimestamp.ReplaceAllString(this.Message, "")
+
 		return nil
 	} else if ute, ok := err.(*json.UnmarshalTypeError); ok && ute.Field == "MESSAGE" && ute.Value == "array" {
 		// Include brackets, which is why we subtract and add by one
@@ -262,8 +206,6 @@ func main() {
 			cmd.Process.Kill()
 			panic("could not parse journal output: " + err.Error())
 		}
-
-		entry.process()
 
 		pending.Push(entry)
 

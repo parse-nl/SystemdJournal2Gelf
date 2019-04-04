@@ -31,7 +31,7 @@ func TestUnmarshalEntry(t *testing.T) {
 	AssertEquals(t, int32(5), gelf.Level)
 	AssertEquals(t, "kernel", gelf.Facility)
 
-	AssertEquals(t, 3, len(gelf.Extra))
+	AssertEquals(t, 4, len(gelf.Extra))
 	AssertEquals(t, "61c0e40c739f4f009c785cef13b46e17", gelf.Extra["Boot_id"])
 	AssertEquals(t, "99", gelf.Extra["Uid"])
 	AssertEquals(t, "1234", gelf.Extra["Pid"])
@@ -55,7 +55,7 @@ func TestJsonMessageOverridesNormalProperties(t *testing.T) {
 	AssertEquals(t, "actually something else", gelf.Short)
 	AssertEquals(t, "additional data", gelf.Full)
 	AssertEquals(t, "kernel", gelf.Facility)
-	AssertEquals(t, 3, len(gelf.Extra))
+	AssertEquals(t, 4, len(gelf.Extra))
 }
 
 func TestJsonMessageIncludeDataInExtra(t *testing.T) {
@@ -74,7 +74,7 @@ func TestJsonMessageIncludeDataInExtra(t *testing.T) {
 	AssertEquals(t, "machine.nl", gelf.Host)
 	AssertEquals(t, "actually something else", gelf.Short)
 	AssertEquals(t, "kernel", gelf.Facility)
-	AssertEquals(t, 4, len(gelf.Extra))
+	AssertEquals(t, 5, len(gelf.Extra))
 	AssertEquals(t, "things and stuff and more like that", gelf.Extra["stuff"])
 }
 
@@ -96,6 +96,28 @@ func TestUnmarshalUnprintableEntry(t *testing.T) {
 	AssertEquals(t, "machine.nl", gelf.Host)
 
 }
+
+func TestDateStrippedFromMessage(t *testing.T) {
+	entry := SystemdJournalEntry{}
+
+	err := json.Unmarshal([]byte(`{
+        "_HOSTNAME" : "machine.nl",
+        "MESSAGE" : "2019-04-04 13:20:27 15024 [Warning] Aborted connection",
+        "SYSLOG_IDENTIFIER" : "mysqld"
+	}`), &entry)
+
+	AssertNotError(t, err)
+
+	gelf := entry.toGelf()
+
+	AssertEquals(t, "machine.nl", gelf.Host)
+	AssertEquals(t, "15024 [Warning] Aborted connection", gelf.Short)
+	AssertEquals(t, "", gelf.Full)
+	AssertEquals(t, "mysqld", gelf.Facility)
+	AssertEquals(t, 4, len(gelf.Extra))
+}
+
+// asserts
 
 func AssertEquals(t *testing.T, expected, actual interface{}) {
 	if expected != actual {
