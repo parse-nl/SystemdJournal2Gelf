@@ -125,7 +125,7 @@ func (this *SystemdJournalEntry) send() {
 }
 
 func (this *SystemdJournalEntry) isJsonMessage() bool {
-	return this.Message[0:2] == `{"`
+	return len(this.Message) > 4 && this.Message[0:2] == `{"`
 }
 
 type pendingEntry struct {

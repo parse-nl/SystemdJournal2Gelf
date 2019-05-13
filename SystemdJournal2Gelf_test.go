@@ -117,6 +117,20 @@ func TestDateStrippedFromMessage(t *testing.T) {
 	AssertEquals(t, 4, len(gelf.Extra))
 }
 
+func TestShortLinesDontTriggerPanic(t *testing.T) {
+	entry := SystemdJournalEntry{}
+
+	err := json.Unmarshal([]byte(`{
+        "MESSAGE" : ""
+	}`), &entry)
+
+	AssertNotError(t, err)
+
+	gelf := entry.toGelf()
+
+	AssertEquals(t, "", gelf.Short)
+}
+
 // asserts
 
 func AssertEquals(t *testing.T, expected, actual interface{}) {
