@@ -18,27 +18,14 @@ import (
 	https://github.com/Graylog2/graylog2-docs/wiki/GELF
 */
 type SystemdJournalEntry struct {
-	Cursor                    string `json:"__CURSOR"`
 	Realtime_timestamp        int64  `json:"__REALTIME_TIMESTAMP,string"`
-	Monotonic_timestamp       string `json:"__MONOTONIC_TIMESTAMP"`
 	Boot_id                   string `json:"_BOOT_ID"`
-	Transport                 string `json:"_TRANSPORT"`
 	Priority                  int32  `json:"PRIORITY,string"`
-	Syslog_facility           string `json:"SYSLOG_FACILITY"`
 	Syslog_identifier         string `json:"SYSLOG_IDENTIFIER"`
 	Message                   string `json:"MESSAGE"`
 	Pid                       string `json:"_PID"`
 	Uid                       string `json:"_UID"`
-	Gid                       string `json:"_GID"`
-	Comm                      string `json:"_COMM"`
-	Exe                       string `json:"_EXE"`
-	Cmdline                   string `json:"_CMDLINE"`
-	Systemd_cgroup            string `json:"_SYSTEMD_CGROUP"`
-	Systemd_session           string `json:"_SYSTEMD_SESSION"`
-	Systemd_owner_uid         string `json:"_SYSTEMD_OWNER_UID"`
 	Systemd_unit              string `json:"_SYSTEMD_UNIT"`
-	Source_realtime_timestamp string `json:"_SOURCE_REALTIME_TIMESTAMP"`
-	Machine_id                string `json:"_MACHINE_ID"`
 	Hostname                  string `json:"_HOSTNAME"`
 	FullMessage               string `json:"-"`
 }
