@@ -1,3 +1,0 @@
-[submodule "vendor/github.com/DECK36/go-gelf"]
-	path = vendor/github.com/DECK36/go-gelf
-	url = https://github.com/DECK36/go-gelf

@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/DECK36/go-gelf/gelf"
+	"gopkg.in/Graylog2/go-gelf.v2/gelf"
 	"io"
 	"os"
 	"os/exec"
@@ -133,7 +133,7 @@ func (this *pendingEntry) ClearEvery(interval time.Duration) {
 	}
 }
 
-var writer *gelf.Writer
+var writer gelf.Writer
 
 const (
 	WRITE_INTERVAL             = 50 * time.Millisecond
@@ -147,7 +147,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if w, err := gelf.NewWriter(os.Args[1]); err != nil {
+	if w, err := gelf.NewUDPWriter(os.Args[1]); err != nil {
 		panic("while connecting to Graylog server: " + err.Error())
 	} else {
 		writer = w
