@@ -1,11 +1,36 @@
 [Unit]
-Description=SystemdJournal2Gelf
-After=network.target
+Description=Forward systemd journal to a remote Graylog server
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 ExecStart=/bin/SystemdJournal2Gelf localhost:12201 --follow
 Restart=on-failure
-RestartSec=30
+RestartSec=5s
+RestartForceExitStatus=3
+
+DynamicUser=true
+Group=systemd-journal
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+PrivateDevices=yes
+PrivateUsers=yes
+
+ProtectSystem=strict
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=true
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 
 [Install]
 WantedBy=multi-user.target
