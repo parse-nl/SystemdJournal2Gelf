@@ -161,7 +161,8 @@ const (
 
 func main() {
 	if len(os.Args) < 3 {
-		panic("usage: SystemdJournal2Gelf SERVER:12201 [JOURNALCTL PARAMETERS]")
+		fmt.Println("usage: SystemdJournal2Gelf SERVER:12201 [JOURNALCTL PARAMETERS]")
+		os.Exit(1)
 	}
 
 	if w, err := gelf.NewWriter(os.Args[1]); err != nil {
