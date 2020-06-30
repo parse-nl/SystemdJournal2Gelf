@@ -41,19 +41,7 @@ func (this *SystemdJournalEntry) toGelf() *gelf.Message {
 		"Systemd_unit": this.Systemd_unit,
 	}
 
-	if this.isJsonMessage() {
-		if err := json.Unmarshal([]byte(this.Message), &extra); err == nil {
-			if m, ok := extra["Message"]; ok {
-				this.Message = m.(string)
-				delete(extra, "Message")
-			}
-
-			if f, ok := extra["FullMessage"]; ok {
-				this.FullMessage = f.(string)
-				delete(extra, "FullMessage")
-			}
-		}
-	} else if -1 != strings.Index(this.Message, "\n") {
+	if strings.Contains(this.Message, "\n") {
 		this.FullMessage = this.Message
 		this.Message = strings.Split(this.Message, "\n")[0]
 	}
@@ -102,17 +90,11 @@ func (this *SystemdJournalEntry) send() {
 	message := this.toGelf()
 
 	for err := writer.WriteMessage(message); err != nil; err = writer.WriteMessage(message) {
-		/*
-			UDP is nonblocking, but the OS stores an error which GO will return on the next call.
-			This means we've already lost a message, but can keep retrying the current one. Sleep to make this less obtrusive
-		*/
+		//	UDP is nonblocking, but the OS stores an error which go will return on the next call.
+		//	This means we've already lost a message, but can keep retrying the current one. Sleep to make this less obtrusive
 		fmt.Fprintln(os.Stderr, "send - processing paused because of: "+err.Error())
 		time.Sleep(SLEEP_AFTER_ERROR)
 	}
-}
-
-func (this *SystemdJournalEntry) isJsonMessage() bool {
-	return len(this.Message) > 4 && this.Message[0:2] == `{"`
 }
 
 type pendingEntry struct {
