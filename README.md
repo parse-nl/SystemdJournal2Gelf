@@ -1,8 +1,9 @@
 SystemdJournal2Gelf
 ===================
 
-Export entries from systemd's journal and send them to a Graylog server using gelf. This script
-is written in Google go to make it easier to compile and distribute to your machines.
+Export entries from systemd's journal and send them to a Graylog server using
+gelf. This script is written in Google go to make it easier to compile and
+distribute to your machines.
 
 Dependencies:
 -------------
@@ -56,11 +57,12 @@ SystemdJournal2Gelf localhost:11201 --follow
 Logging additional properties:
 ------------------------------
 
-This script supports a special syntax to send additional properties; when you log a JSON encoded
-object in the Message field [it Unmarshalls](https://github.com/parse-nl/SystemdJournal2Gelf/blob/master/SystemdJournal2Gelf.go#L87) it for you
+Letting this script decode json encoded properties in Messages has been removed,
+please see [this issue](https://github.com/parse-nl/SystemdJournal2Gelf/issues/10)
+that explains how to configure graylog to do that instead
 
 License
 -------
-Copyright (c) 2016-2017, Parse Software Development B.V.
+Copyright (c) 2016-2021, Parse Software Development B.V.
 
 Released under the Simplified BSD license, see LICENSE for details.
