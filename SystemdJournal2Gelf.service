@@ -32,5 +32,9 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 
+CPUWeight=5000
+MemoryHigh=512M
+MemoryMax=1G
+
 [Install]
 WantedBy=multi-user.target
