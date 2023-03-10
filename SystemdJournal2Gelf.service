@@ -21,11 +21,9 @@ PrivateUsers=yes
 
 ProtectSystem=strict
 ProtectClock=yes
-ProtectControlGroups=yes
 ProtectHome=true
 ProtectKernelLogs=yes
 ProtectKernelModules=yes
-ProtectKernelTunables=yes
 
 RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
